@@ -1,0 +1,91 @@
+---
+# Provision a box to do the computation.
+#
+# This is meant to be useful for local Vagrant virtual machines as well as for
+# spot instances in the AWS cloud, for instance.
+
+- name: Provision the box
+  hosts: all
+  become: yes
+  tasks:
+    - name: Upgrade aptitude packages
+      apt:
+        upgrade: "full"
+        update_cache: yes
+
+    - name: Install aptitude packages
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: yes
+        cache_valid_time: 3600
+      with_items:
+        - git # Needed to download Torch in the first place.
+        - libssl-dev # For luacrypto dependencies.
+        - python-pip
+        - python2.7-dev # For torch-rnn
+        - libhdf5-dev   # For torch-rnn
+
+# Torch automates installation in a straightforward way; might as well use it.
+# This is straight from http://torch.ch/docs/getting-started.html
+- name: Install torch within the user account
+  hosts: all
+  tasks:
+    - name: Grab Torch Repository
+      git:
+        repo: "https://github.com/torch/distro.git"
+        dest: "~/torch"
+        recursive: yes
+        force: yes
+        accept_hostkey: yes
+
+    - name: Install Torch Dependencies
+      shell: "cd ~/torch; bash install-deps"
+
+    # Kinda a hacky way to make sure it's idempotent. Whatevs.
+    - name: Install Torch with default options
+      shell: "cd ~/torch; test ! -f install/bin/th && yes | ./install.sh"
+
+# Install the LuaRocks dependencies for char-rnn. This command's path is
+# a bit fragile, depending on changes of torch's installer.
+- name: Install project dependencies
+  hosts: all
+  tasks:
+    - name: Install luarocks
+      shell: "~/torch/install/bin/luarocks install {{ item }}"
+      with_items:
+        # Listed in https://github.com/karpathy/char-rnn README document.
+        - nngraph
+        - optim
+        - nn
+        - lua-cjson
+      tags:
+        - luarocks
+
+    - name: Clone torch-hdf5 repo
+      git:
+        repo: "https://github.com/deepmind/torch-hdf5"
+        dest: "~/torch-hdf5"
+        force: yes
+        accept_hostkey: yes
+      tags:
+        - luarocks
+
+    - name: Install hdf5 rock
+      shell: "cd ~/torch-hdf5; ~/torch/install/bin/luarocks make hdf5-0-0.rockspec"
+      tags:
+        - luarocks
+
+# Grab the torch-rnn repo to play with.
+- name: Install torch-rnn
+  hosts: all
+  tasks:
+    - name: Grab torch-rnn git repo
+      git:
+        repo: "https://github.com/jcjohnson/torch-rnn.git"
+        dest: "~/torch-rnn"
+        force: yes
+        accept_hostkey: yes
+
+    - name: Install pip requirements
+      pip: requirements=~/torch-rnn/requirements.txt
