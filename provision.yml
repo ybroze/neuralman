@@ -44,6 +44,20 @@
         deb: "~/cuda-repo-ubuntu1404_7.5-18_amd64.deb"
       when: (use_cuda == 'true') and (cuda_check_deb.rc == 1)
 
+    - name: Update PATH
+      lineinfile:
+        dest: /etc/environment
+        state: present
+        backrefs: yes
+        regexp: 'PATH=(["]*)((?!.*?/usr/local/cuda/bin).*?)(["]*)$'
+        line: 'PATH=\1\2:/usr/local/cuda/bin\3'
+
+    - name: Set LD_LIBRARY_PATH (cuda only for now)
+      lineinfile:
+        dest: /etc/environment
+        state: present
+        line: "LD_LIBRARY_PATH=/usr/local/cuda/lib64"
+
 # Torch automates installation in a straightforward way; might as well use it.
 # This is straight from http://torch.ch/docs/getting-started.html
 - name: Install torch within the user account
