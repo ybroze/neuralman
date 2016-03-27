@@ -41,3 +41,9 @@ luac.out
 
 # Vagrant
 .vagrant
+
+# Hosts
+aws
+
+# Vim
+*.swp
